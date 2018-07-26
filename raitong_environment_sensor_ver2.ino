@@ -1,0 +1,269 @@
+/*******************************************************
+    Author: Lim Ren Yi & Benjamin Low
+    Date: Jul 2018
+    Title: Raitong Environment Sensor
+    Description: Environment Sensor for Black Soldier Fly and Earthworm monitoring
+                 Includes a DHT22 (temp and humidity), capacitive soil moisture
+                 sensor and light sensor.
+
+                 Ver2 uses full size D1 and includes the SD card & Real Time Clock (RTC) DS3231 module
+
+    Connections: WeMos full size D1
+        A0 - moisture sensor A
+        D0 - OLED RESET
+        D1 (SCL) - OLED D0 & BH1750 SCL
+        D2 (SDA) - OLED D1 & BH1750 SDA
+        D3 - DHT22 (needs 10K pullup resistor to DHT Vcc)
+        D4 - button with inbuilt pullup resistor
+        D5/SCK - SDcard SCK
+        D6/MISO - SDcard MISO
+        D7/MOSI - SDcard MOSI
+        D8/SS - SDcard CS
+
+    Power for components:
+        BH1750 - 5V
+        OLED - 3.3V
+        Moisture - 5V
+        DHT22 - 5V
+        SDcard - 5V
+
+    Notes:
+    OLED: Need to remove R3 resistor for oled and short R1, R4, R5, R6
+    In SSD1306.h:  #define SSD1306_128_64
+    Ensure 10K pullup resistor for DHT has good electrical contact and is not loose,
+    else will get NaN reading
+*******************************************************/
+
+#include <SPI.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <dht.h>
+#include <Wire.h> //BH1750 IIC Mode
+#include <Math.h>
+#include <Button.h>
+#include <SD.h>
+#include <DS3231.h>
+
+//user settings
+const int OLEDDISPLAYDURATION = 5000;//how long in ms to display sensor data on OLED screen
+const int DATALOGINTERVAL = 5000; //time interval between data logs
+
+//sensors
+int BH1750address = 0x23; //setting i2c address
+byte buff[2];
+#define moistureSensorPin A0
+#define DHTPIN D3 // what digital pin we're connected to
+dht DHT;
+
+
+//OLED screen
+#define OLED_RESET D0
+Adafruit_SSD1306 display(OLED_RESET);
+#if (SSD1306_LCDHEIGHT != 64)
+#error("Height incorrect, please fix Adafruit_SSD1306.h!");
+#endif
+bool isOLEDon;
+
+//SD card module
+const int chipSelect = D8;
+
+//RTC DS3231 module
+DS3231 Clock;
+bool Century = false, PM, h12 = false;
+
+//push button
+Button myButton = Button(D4, PULLUP);
+
+//global variables
+unsigned long lastLoggedTime, buttonPressedTime;
+float tempVal, humidVal;
+int moistVal, lightVal;
+
+void setup()   {
+  Wire.begin();
+  Serial.begin(9600);
+  //  dht.begin();
+  delay(1000); // delay 1 sec
+
+  // SD card
+  Serial.print("Initializing SD card...");
+  if (!SD.begin(chipSelect)) { // see if the card is present and can be initialized:
+    Serial.println("Card failed, or not present");
+    // don't do anything more:
+    exit;
+  }
+  Serial.println("card initialized.");
+
+  //OLED screen
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.clearDisplay();
+  display.setTextColor(WHITE); //need to set this
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println("Raitong");
+  display.setTextSize(1);
+  display.println("Environment\nSensor");
+  display.display();
+
+  Serial.println("Raitong Environment Sensor");
+
+  delay(4000);
+  display.clearDisplay();
+  display.display();
+
+  //RTC DS3231
+  Clock.setClockMode(h12); //12h format -> true, 24h format -> false
+}
+
+void loop() {
+
+  if (myButton.uniquePress() && !isOLEDon) {
+
+    buttonPressedTime = millis();
+    isOLEDon = true;
+
+    //display all the sensor values on OLED screen
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(0, 0);
+    display.print("Temp: ");
+    display.print(tempVal);
+    display.println(" deg C");
+    display.println("");
+
+    display.print("Humidity: ");
+    display.print(humidVal);
+    display.println("%");
+    display.println("");
+
+    display.print("Moist: ");
+    display.print(moistVal);
+    display.println("%");
+    display.println("");
+
+    display.print("Light");
+    display.print(" ");
+    display.print(lightVal, DEC);
+    display.println(" lux");
+
+    display.display();
+
+    // print to the serial port too:
+    Serial.println();
+    Serial.print(millis());
+    Serial.println(": Button pressed");
+    Serial.println();
+    /*
+            Serial.print("Temp: ");
+            Serial.print(tempVal);
+            Serial.println(" degC");
+            Serial.println("");
+
+            Serial.print("Humidity: ");
+            Serial.print(humidVal);
+            Serial.println("%");
+            Serial.println("");
+
+            Serial.print("Moist: ");
+            Serial.print(moistVal);
+            Serial.println("%");
+            Serial.println("");
+
+            Serial.print("Light");
+            Serial.print(" ");
+            Serial.print(lightVal, DEC);
+            Serial.println(" lux");
+    */
+  }
+
+  if (millis() - buttonPressedTime > OLEDDISPLAYDURATION && isOLEDon) {
+    //auto-shutdown OLED screen
+    display.clearDisplay();
+    display.display();
+    isOLEDon = false;
+  }
+
+  if (millis() - lastLoggedTime > DATALOGINTERVAL) {
+
+    update_sensor_values();
+
+    String dataString = "";
+
+    String timeStampString = get_timestamp();
+    //    Serial.println(timeStampString);
+
+    dataString = timeStampString + String(tempVal) + "," + String(humidVal) + "," + String(moistVal) + "," + String(lightVal) + "\n";
+
+    File dataFile = SD.open("datalog.txt", FILE_WRITE);
+
+    if (dataFile) {
+      dataFile.println(dataString);
+      dataFile.close();
+      // print to the serial port too:
+      Serial.print("logging to SD card: ");
+      Serial.println(dataString);
+    }
+    // if the file isn't open, pop up an error:
+    else {
+      Serial.println("error opening datalog.txt");
+    }
+
+    lastLoggedTime = millis();
+  }
+}
+
+void update_sensor_values() {
+  //get all the sensor values
+  //  temp = dht.readTemperature();
+  //  humid = dht.readHumidity();
+  get_DHT_reading();
+
+  moistVal = analogRead(moistureSensorPin);
+  moistVal = map(moistVal, 375, 740, 100, 0);
+  // float voltage = sensorValue * (1024 / 100);
+
+  BH1750_Init(BH1750address);
+  delay(200);
+
+  if (2 == BH1750_Read(BH1750address)) lightVal = ((buff[0] << 8) | buff[1]) / 1.2;
+  delay(150);
+}
+
+String get_timestamp() {
+  //get back a string formatted as "DD/MM/YY,hh:mm,[temp(degC) humid(%) moist(%) light(lux)],"
+  String _year = String(Clock.getYear(), DEC);
+  String _month = String(Clock.getMonth(Century), DEC);//not yet 2100
+  String _day = String(Clock.getDate(), DEC);
+  String _hour = String(Clock.getHour(h12, PM), DEC);
+  String _minute = String(Clock.getMinute(), DEC);
+
+  String timestamp = _day + "/" + _month + "/" + _year + "," + _hour + ":" + _minute + ",[temp(degC) humid(%) moist(%) light(lux)],";
+
+  return timestamp;
+}
+
+void get_DHT_reading() {
+  int chk = DHT.read22(DHTPIN);
+
+  switch (chk)
+  {
+    case DHTLIB_OK:
+      //      Serial.print("OK,\t");
+      break;
+    case DHTLIB_ERROR_CHECKSUM:
+      //      Serial.print("Checksum error,\t");
+      break;
+    case DHTLIB_ERROR_TIMEOUT:
+      //      Serial.print("Time out error,\t");
+      break;
+    default:
+      //      Serial.print("Unknown error,\t");
+      break;
+  }
+  humidVal = DHT.humidity;
+  tempVal = DHT.temperature;
+}
+
+
+
+
