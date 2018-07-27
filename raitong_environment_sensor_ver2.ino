@@ -13,7 +13,7 @@
         D0 - OLED RESET
         D1 (SCL) - OLED D0 & BH1750 SCL
         D2 (SDA) - OLED D1 & BH1750 SDA
-        D3 - DHT22 
+        D3 - DHT22
         D4 - button with inbuilt pullup resistor
         D5/SCK - SDcard SCK
         D6/MISO - SDcard MISO
@@ -263,6 +263,25 @@ void get_DHT_reading() {
   tempVal = DHT.temperature;
 }
 
+int BH1750_Read(int address) //
+{
+  int i = 0;
+  Wire.beginTransmission(address);
+  Wire.requestFrom(address, 2);
+  while (Wire.available()) //
+  {
+    buff[i] = Wire.read();  // receive one byte
+    i++;
+  }
+  Wire.endTransmission();
+  return i;
+}
 
+void BH1750_Init(int address)
+{
+  Wire.beginTransmission(address);
+  Wire.write(0x10);//1lx reolution 120ms
+  Wire.endTransmission();
+}
 
 
