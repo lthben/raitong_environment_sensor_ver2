@@ -30,8 +30,6 @@
     Notes:
     OLED: Need to remove R3 resistor for oled and short R1, R4, R5, R6
     In SSD1306.h:  #define SSD1306_128_64
-    Ensure 10K pullup resistor for DHT has good electrical contact and is not loose,
-    else will get NaN reading
 *******************************************************/
 
 #include <SPI.h>
@@ -192,7 +190,7 @@ void loop() {
     String timeStampString = get_timestamp();
     //    Serial.println(timeStampString);
 
-    dataString = timeStampString + String(tempVal) + "," + String(humidVal) + "," + String(moistVal) + "," + String(lightVal) + "\n";
+    dataString = timeStampString + String(tempVal) + ", " + String(humidVal) + ", " + String(moistVal) + ", " + String(lightVal) + ", [temp(degC) humid(%) moist(%) light(lux)]\n";
 
     File dataFile = SD.open("datalog.txt", FILE_WRITE);
 
@@ -230,14 +228,16 @@ void update_sensor_values() {
 }
 
 String get_timestamp() {
-  //get back a string formatted as "DD/MM/YY,hh:mm,[temp(degC) humid(%) moist(%) light(lux)],"
+  //get back a string formatted as "DD/MM/YY,hh:mm,"
   String _year = String(Clock.getYear(), DEC);
   String _month = String(Clock.getMonth(Century), DEC);//not yet 2100
   String _day = String(Clock.getDate(), DEC);
   String _hour = String(Clock.getHour(h12, PM), DEC);
+  if (_hour.toInt() < 10) _hour = "0" + _hour;
   String _minute = String(Clock.getMinute(), DEC);
+  if (_minute.toInt() < 10) _minute = "0" + _minute;
 
-  String timestamp = _day + "/" + _month + "/" + _year + "," + _hour + ":" + _minute + ",[temp(degC) humid(%) moist(%) light(lux)],";
+  String timestamp = _day + "/" + _month + "/" + _year + ", " + _hour + ":" + _minute + ", ";
 
   return timestamp;
 }
