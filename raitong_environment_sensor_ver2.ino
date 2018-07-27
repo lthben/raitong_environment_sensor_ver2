@@ -117,6 +117,7 @@ void loop() {
 
   if (myButton.uniquePress() && !isOLEDon) {
 
+    delay(100); //debouncing
     buttonPressedTime = millis();
     isOLEDon = true;
 
