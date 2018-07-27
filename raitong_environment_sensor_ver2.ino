@@ -13,7 +13,7 @@
         D0 - OLED RESET
         D1 (SCL) - OLED D0 & BH1750 SCL
         D2 (SDA) - OLED D1 & BH1750 SDA
-        D3 - DHT22 (needs 10K pullup resistor to DHT Vcc)
+        D3 - DHT22 
         D4 - button with inbuilt pullup resistor
         D5/SCK - SDcard SCK
         D6/MISO - SDcard MISO
@@ -80,8 +80,6 @@ int moistVal, lightVal;
 void setup()   {
   Wire.begin();
   Serial.begin(9600);
-  //  dht.begin();
-  delay(1000); // delay 1 sec
 
   // SD card
   Serial.print("Initializing SD card...");
