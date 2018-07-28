@@ -8,8 +8,9 @@
 
                  Ver2 uses full size D1 and includes the SD card & Real Time Clock (RTC) DS3231 module
 
+                 This is for a 128x64 OLED display 
+                 
     Connections: WeMos full size D1
-        A0 - moisture sensor A
         D0 - OLED RESET
         D1 (SCL) - OLED D0 & BH1750 SCL
         D2 (SDA) - OLED D1 & BH1750 SDA
@@ -23,7 +24,6 @@
     Power for components:
         BH1750 - 5V
         OLED - 3.3V
-        Moisture - 5V
         DHT22 - 5V
         SDcard - 5V
 
@@ -44,12 +44,11 @@
 
 //user settings
 const int OLEDDISPLAYDURATION = 5000;//how long in ms to display sensor data on OLED screen
-const int DATALOGINTERVAL = 5000; //time interval between data logs
+const int DATALOGINTERVAL = 1800000; //time interval between data logs
 
 //sensors
 int BH1750address = 0x23; //setting i2c address
 byte buff[2];
-#define moistureSensorPin A0
 #define DHTPIN D3 // what digital pin we're connected to
 dht DHT;
 
@@ -75,7 +74,7 @@ Button myButton = Button(D4, PULLUP);
 //global variables
 unsigned long lastLoggedTime, buttonPressedTime;
 float tempVal, humidVal;
-int moistVal, lightVal;
+int lightVal;
 
 void setup()   {
   Wire.begin();
@@ -133,11 +132,6 @@ void loop() {
     display.println("%");
     display.println("");
 
-    display.print("Moist: ");
-    display.print(moistVal);
-    display.println("%");
-    display.println("");
-
     display.print("Light");
     display.print(" ");
     display.print(lightVal, DEC);
@@ -158,11 +152,6 @@ void loop() {
 
             Serial.print("Humidity: ");
             Serial.print(humidVal);
-            Serial.println("%");
-            Serial.println("");
-
-            Serial.print("Moist: ");
-            Serial.print(moistVal);
             Serial.println("%");
             Serial.println("");
 
@@ -189,7 +178,7 @@ void loop() {
     String timeStampString = get_timestamp();
     //    Serial.println(timeStampString);
 
-    dataString = timeStampString + String(tempVal) + ", " + String(humidVal) + ", " + String(moistVal) + ", " + String(lightVal) + ", [temp(degC) humid(%) moist(%) light(lux)]\n";
+    dataString = timeStampString + String(tempVal) + ", " + String(humidVal) + ", " + String(lightVal) + "\n";
 
     File dataFile = SD.open("datalog.txt", FILE_WRITE);
 
@@ -214,10 +203,6 @@ void update_sensor_values() {
   //  temp = dht.readTemperature();
   //  humid = dht.readHumidity();
   get_DHT_reading();
-
-  moistVal = analogRead(moistureSensorPin);
-  moistVal = map(moistVal, 375, 740, 100, 0);
-  // float voltage = sensorValue * (1024 / 100);
 
   BH1750_Init(BH1750address);
   delay(200);
